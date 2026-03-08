@@ -33,6 +33,7 @@ export default function TriageDashboard() {
   const [analyses, setAnalyses] = useState<Map<string, AnalysisResult>>(new Map());
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [loadingHotspots, setLoadingHotspots] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +196,10 @@ export default function TriageDashboard() {
                   analysis={h.analysis ?? null}
                   isAnalyzing={analyzingIds.has(h.id)}
                   isSelected={selectedId === h.id}
+                  isHovered={hoveredId === h.id}
                   onClick={() => setSelectedId(h.id === selectedId ? null : h.id)}
+                  onHover={() => setHoveredId(h.id)}
+                  onHoverEnd={() => setHoveredId(null)}
                 />
               ))}
             </div>
@@ -207,7 +211,10 @@ export default function TriageDashboard() {
           <MapView
             hotspots={enriched}
             selectedId={selectedId}
+            hoveredId={hoveredId}
             onSelect={(h) => setSelectedId(h.id === selectedId ? null : h.id)}
+            onHover={(h) => setHoveredId(h.id)}
+            onHoverEnd={() => setHoveredId(null)}
             zoom={4}
           />
 
@@ -235,7 +242,7 @@ export default function TriageDashboard() {
       </div>
 
       {/* Detail modal */}
-      {selected && selectedAnalysis && (
+      {selected && (
         <HotspotModal
           hotspot={selected}
           analysis={selectedAnalysis}

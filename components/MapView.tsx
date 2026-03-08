@@ -11,7 +11,10 @@ export interface HotspotWithAnalysis extends Hotspot {
 interface MapViewProps {
   hotspots?: HotspotWithAnalysis[];
   selectedId?: string | null;
+  hoveredId?: string | null;
   onSelect?: (hotspot: HotspotWithAnalysis) => void;
+  onHover?: (hotspot: HotspotWithAnalysis) => void;
+  onHoverEnd?: () => void;
   center?: [number, number]; // [lng, lat]
   zoom?: number;
   label?: string;
@@ -26,7 +29,10 @@ const RISK_COLORS: Record<RiskColor, string> = {
 export function MapView({
   hotspots = [],
   selectedId,
+  hoveredId,
   onSelect,
+  onHover,
+  onHoverEnd,
   center,
   zoom = 4,
   label,
@@ -100,30 +106,39 @@ export function MapView({
           ? RISK_COLORS[hotspot.analysis.risk_color]
           : "#94a3b8"; // slate-400 for unanalyzed
         const isSelected = hotspot.id === selectedId;
-        const radius = isSelected ? 10 : 7;
-        const weight = isSelected ? 2 : 1;
+        const isHovered = hotspot.id === hoveredId;
+        const radius = isSelected ? 11 : isHovered ? 13 : 7;
+        const weight = isSelected ? 2 : isHovered ? 2.5 : 1;
+        const outlineColor = isSelected ? "#f59e0b" : isHovered ? "#ffffff" : color;
+        const fillOpacity = isHovered && !isSelected ? 1 : 0.85;
 
         const existing = markersRef.current.get(hotspot.id);
         if (existing) {
-          existing.setStyle({ fillColor: color, color: isSelected ? "#f59e0b" : color, radius, weight });
+          existing.setStyle({ fillColor: color, color: outlineColor, radius, weight, fillOpacity });
         } else {
           const marker = L.default
             .circleMarker([hotspot.lat, hotspot.lon], {
               radius,
               fillColor: color,
-              color,
-              fillOpacity: 0.85,
+              color: outlineColor,
+              fillOpacity,
               weight,
             })
             .addTo(map);
 
           const tooltipContent = hotspot.analysis
-            ? `${hotspot.analysis.risk_level}: ${hotspot.analysis.risk_summary.slice(0, 80)}...`
+            ? `${hotspot.analysis.risk_level}: ${hotspot.analysis.conclusion.slice(0, 80)}...`
             : `${hotspot.lat.toFixed(3)}, ${hotspot.lon.toFixed(3)} — pending analysis`;
           marker.bindTooltip(tooltipContent, { sticky: true });
 
           if (onSelect) {
             marker.on("click", () => onSelect(hotspot));
+          }
+          if (onHover) {
+            marker.on("mouseover", () => onHover(hotspot));
+          }
+          if (onHoverEnd) {
+            marker.on("mouseout", () => onHoverEnd());
           }
           markersRef.current.set(hotspot.id, marker);
         }

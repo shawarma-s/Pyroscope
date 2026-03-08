@@ -8,12 +8,27 @@ import type { WeatherData } from "@/lib/data/open-meteo";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
 export type RiskColor = "red" | "yellow" | "green";
+export type ActionPriority = "IMMEDIATE" | "URGENT" | "ADVISORY";
+export type ActionCategory = "evacuation" | "suppression" | "monitoring" | "notification" | "resource";
+
+export interface RecommendedAction {
+  priority: ActionPriority;
+  category: ActionCategory;
+  action: string;
+  agency: string;
+}
 
 export interface TriageResult {
   hotspot_id: string;
   risk_level: RiskLevel;
   risk_color: RiskColor;
-  risk_summary: string;
+  threat_summary: string;
+  analysis_details: string;
+  fire_behavior: string;
+  conclusion: string;
+  recommended_action: string;
+  recommended_actions: RecommendedAction[];
+  estimated_area_ha: number;
   terrain: string;
   vegetation: string;
   structures_nearby: boolean;
@@ -45,15 +60,39 @@ Current weather conditions:
 - Relative humidity: ${weather.humidity}%
 - Temperature: ${weather.temperature_c}°C
 
-Analyze the satellite image and answer:
-1. What is the terrain type? (e.g. steep slope, flat, rolling hills, valley)
-2. How dense and dry does the vegetation appear?
-3. Are there visible structures, roads, or populated areas nearby?
-4. Given the wind direction, which direction would fire spread most rapidly?
-5. Assign a risk level — HIGH, MEDIUM, or LOW — based on: terrain slope, vegetation density/dryness, proximity to structures, wind speed, and humidity.
+Analyze the satellite image and provide a comprehensive wildfire triage assessment:
+1. Terrain type (e.g. steep slope, flat, rolling hills, valley, ridgeline)
+2. Vegetation density, type, and estimated dryness
+3. Visible structures, roads, communities, or populated areas nearby
+4. Given wind direction, primary and secondary spread directions
+5. Estimate the approximate area affected in hectares based on visible burn scar or thermal signature
+6. Describe likely fire behavior (e.g. crown fire potential, spotting risk, rate of spread)
+7. A one-sentence threat summary for emergency dispatch
+8. Risk level — HIGH, MEDIUM, or LOW
+9. 3–5 prioritized recommended actions. For each action specify:
+   - priority: IMMEDIATE (life/safety, next 1h), URGENT (next 6h), or ADVISORY (monitoring/planning)
+   - category: one of evacuation | suppression | monitoring | notification | resource
+   - action: concise imperative sentence describing the specific action
+   - agency: the responsible agency or team (e.g. "BC Wildfire Service", "Local Fire Department", "RCMP", "Emergency Management BC", "Air Tanker Base")
 
 Respond ONLY with valid JSON (no markdown, no code fences):
-{"terrain":"...","vegetation":"...","structures_nearby":true_or_false,"spread_direction":"...","risk_level":"HIGH or MEDIUM or LOW","risk_summary":"2-sentence explanation of your risk assessment"}`;
+{
+  "terrain": "...",
+  "vegetation": "...",
+  "structures_nearby": true_or_false,
+  "spread_direction": "primary direction, secondary direction",
+  "estimated_area_ha": number,
+  "fire_behavior": "1-2 sentences on fire behavior and rate of spread",
+  "risk_level": "HIGH or MEDIUM or LOW",
+  "threat_summary": "one sentence for dispatch",
+  "analysis_details": "2-3 sentences on terrain, vegetation, and weather",
+  "conclusion": "1-2 sentence overall risk conclusion",
+  "recommended_action": "single top-priority action sentence",
+  "recommended_actions": [
+    {"priority": "IMMEDIATE", "category": "evacuation", "action": "...", "agency": "..."},
+    {"priority": "URGENT", "category": "suppression", "action": "...", "agency": "..."}
+  ]
+}`;
 }
 
 function parseTriageJson(content: string): Partial<TriageResult> {
@@ -108,8 +147,16 @@ export async function analyzeHotspot(
       vegetation: "Unknown",
       structures_nearby: false,
       spread_direction: "Unknown",
+      estimated_area_ha: 0,
+      fire_behavior: "Unable to determine fire behavior.",
       risk_level: "MEDIUM",
-      risk_summary: content.slice(0, 300) || "Analysis unavailable.",
+      threat_summary: "Analysis unavailable — assess manually.",
+      analysis_details: "Analysis unavailable.",
+      conclusion: "Analysis unavailable.",
+      recommended_action: "Dispatch ground crew for manual assessment.",
+      recommended_actions: [
+        { priority: "URGENT", category: "monitoring", action: "Dispatch ground crew for manual assessment of this hotspot.", agency: "Local Fire Department" },
+      ],
     };
   }
 
@@ -122,7 +169,13 @@ export async function analyzeHotspot(
     hotspot_id: hotspot.id,
     risk_level,
     risk_color: riskColor(risk_level),
-    risk_summary: parsed.risk_summary ?? "No summary available.",
+    threat_summary: (parsed as Partial<TriageResult>).threat_summary ?? "Assess this hotspot immediately.",
+    analysis_details: parsed.analysis_details ?? "No details available.",
+    fire_behavior: (parsed as Partial<TriageResult>).fire_behavior ?? "Fire behavior unknown.",
+    conclusion: parsed.conclusion ?? "No conclusion available.",
+    recommended_action: parsed.recommended_action ?? "No action recommended.",
+    recommended_actions: (parsed as Partial<TriageResult>).recommended_actions ?? [],
+    estimated_area_ha: (parsed as Partial<TriageResult>).estimated_area_ha ?? 0,
     terrain: parsed.terrain ?? "Unknown",
     vegetation: parsed.vegetation ?? "Unknown",
     structures_nearby: parsed.structures_nearby ?? false,
