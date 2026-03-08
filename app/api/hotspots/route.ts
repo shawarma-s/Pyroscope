@@ -6,7 +6,8 @@ export async function GET() {
     const hotspots = await getHotspots();
     return NextResponse.json({ hotspots, count: hotspots.length });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch hotspots";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[/api/hotspots]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -8,12 +8,27 @@ import type { WeatherData } from "@/lib/data/open-meteo";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
 export type RiskColor = "red" | "yellow" | "green";
+export type ActionPriority = "IMMEDIATE" | "URGENT" | "ADVISORY";
+export type ActionCategory = "evacuation" | "suppression" | "monitoring" | "notification" | "resource";
+
+export interface RecommendedAction {
+  priority: ActionPriority;
+  category: ActionCategory;
+  action: string;
+  agency: string;
+}
 
 export interface TriageResult {
   hotspot_id: string;
   risk_level: RiskLevel;
   risk_color: RiskColor;
-  risk_summary: string;
+  threat_summary: string;
+  analysis_details: string;
+  fire_behavior: string;
+  conclusion: string;
+  recommended_action: string;
+  recommended_actions: RecommendedAction[];
+  estimated_area_ha: number;
   terrain: string;
   vegetation: string;
   structures_nearby: boolean;
@@ -32,28 +47,54 @@ function riskColor(level: RiskLevel): RiskColor {
 }
 
 function buildPrompt(hotspot: Hotspot, weather: WeatherData): string {
-  return `You are an expert wildfire analyst working in a wildfire triage system for Canada.
+  return `You are an expert wildfire analyst working in a global wildfire triage system.
 
-Analyze the provided satellite image of a thermal anomaly (possible wildfire ignition) at coordinates:
-- Latitude: ${hotspot.lat.toFixed(4)}, Longitude: ${hotspot.lon.toFixed(4)}
-- Fire Radiative Power: ${hotspot.frp} MW (higher = more energetic)
-- Satellite confidence: ${hotspot.confidence}
+You are assessing a VIIRS satellite thermal anomaly. Your job is to produce an accurate, calibrated risk assessment — not to assume the worst. Many hotspots are agricultural burns, small brush fires, or industrial heat sources with no meaningful threat. Only assign HIGH risk when the evidence genuinely supports it.
+
+Hotspot data:
+- Location: ${hotspot.lat.toFixed(4)}°, ${hotspot.lon.toFixed(4)}°
+- Fire Radiative Power (FRP): ${hotspot.frp} MW
+  FRP context: FRP measures radiant heat output. Values under ~10 MW are typically small or smoldering fires (agricultural burns, campfires, industrial). Values of 50–200 MW suggest active moderate fires. Values above 200 MW indicate large, energetic wildfires. Use this to calibrate your assessment — do not treat a low-FRP anomaly as an imminent catastrophe.
+- Detection confidence: ${hotspot.confidence} (low confidence = higher false-positive rate)
 - Detected: ${hotspot.acq_date} at ${hotspot.acq_time} UTC
 
-Current weather conditions:
-- Wind: ${weather.wind_speed_kmh} km/h from the ${weather.wind_direction_cardinal} (${weather.wind_direction_deg}°)
+Current weather at location:
+- Wind: ${weather.wind_speed_kmh} km/h from ${weather.wind_direction_cardinal} (${weather.wind_direction_deg}°)
 - Relative humidity: ${weather.humidity}%
 - Temperature: ${weather.temperature_c}°C
 
-Analyze the satellite image and answer:
-1. What is the terrain type? (e.g. steep slope, flat, rolling hills, valley)
-2. How dense and dry does the vegetation appear?
-3. Are there visible structures, roads, or populated areas nearby?
-4. Given the wind direction, which direction would fire spread most rapidly?
-5. Assign a risk level — HIGH, MEDIUM, or LOW — based on: terrain slope, vegetation density/dryness, proximity to structures, wind speed, and humidity.
+Using the satellite image and all data above, provide a triage assessment covering:
+1. Terrain type visible in the image
+2. Vegetation density, type, and apparent dryness
+3. Visible structures, roads, communities, or populated areas nearby
+4. Given wind, likely spread direction if fire were to grow
+5. Estimated area affected in hectares based on the thermal signature or burn scar visible
+6. Likely fire behavior given the FRP, terrain, and weather — be honest if this appears minor
+7. A one-sentence threat summary calibrated to the actual signal strength
+8. Risk level — HIGH, MEDIUM, or LOW — justified by the totality of evidence, not just worst-case assumptions
+9. 2–4 recommended actions proportional to the assessed risk. A low-FRP anomaly with low confidence warrants monitoring actions, not mass evacuations. Each action must include:
+   - priority: IMMEDIATE (life/safety threat now), URGENT (action needed within 6h), or ADVISORY (monitoring/planning)
+   - category: evacuation | suppression | monitoring | notification | resource
+   - action: concise imperative sentence
+   - agency: responsible agency appropriate to the country/region of the coordinates
 
 Respond ONLY with valid JSON (no markdown, no code fences):
-{"terrain":"...","vegetation":"...","structures_nearby":true_or_false,"spread_direction":"...","risk_level":"HIGH or MEDIUM or LOW","risk_summary":"2-sentence explanation of your risk assessment"}`;
+{
+  "terrain": "...",
+  "vegetation": "...",
+  "structures_nearby": true_or_false,
+  "spread_direction": "primary direction, secondary direction",
+  "estimated_area_ha": number,
+  "fire_behavior": "1-2 sentences on fire behavior and rate of spread",
+  "risk_level": "HIGH or MEDIUM or LOW",
+  "threat_summary": "one sentence for dispatch",
+  "analysis_details": "2-3 sentences on terrain, vegetation, and weather",
+  "conclusion": "1-2 sentence overall risk conclusion",
+  "recommended_action": "single top-priority action sentence",
+  "recommended_actions": [
+    {"priority": "ADVISORY", "category": "monitoring", "action": "...", "agency": "..."}
+  ]
+}`;
 }
 
 function parseTriageJson(content: string): Partial<TriageResult> {
@@ -87,8 +128,10 @@ export async function analyzeHotspot(
   const messageOptions: {
     content: string;
     stream: false;
+    llm_provider: string;
+    model_name: string;
     files?: string[];
-  } = { content: prompt, stream: false };
+  } = { content: prompt, stream: false, llm_provider: "openai", model_name: "gpt-4o" };
 
   if (imagePath) {
     messageOptions.files = [imagePath];
@@ -108,8 +151,16 @@ export async function analyzeHotspot(
       vegetation: "Unknown",
       structures_nearby: false,
       spread_direction: "Unknown",
+      estimated_area_ha: 0,
+      fire_behavior: "Unable to determine fire behavior.",
       risk_level: "MEDIUM",
-      risk_summary: content.slice(0, 300) || "Analysis unavailable.",
+      threat_summary: "Analysis unavailable — assess manually.",
+      analysis_details: "Analysis unavailable.",
+      conclusion: "Analysis unavailable.",
+      recommended_action: "Dispatch ground crew for manual assessment.",
+      recommended_actions: [
+        { priority: "URGENT", category: "monitoring", action: "Dispatch ground crew for manual assessment of this hotspot.", agency: "Local Fire Department" },
+      ],
     };
   }
 
@@ -122,7 +173,13 @@ export async function analyzeHotspot(
     hotspot_id: hotspot.id,
     risk_level,
     risk_color: riskColor(risk_level),
-    risk_summary: parsed.risk_summary ?? "No summary available.",
+    threat_summary: (parsed as Partial<TriageResult>).threat_summary ?? "Assess this hotspot immediately.",
+    analysis_details: parsed.analysis_details ?? "No details available.",
+    fire_behavior: (parsed as Partial<TriageResult>).fire_behavior ?? "Fire behavior unknown.",
+    conclusion: parsed.conclusion ?? "No conclusion available.",
+    recommended_action: parsed.recommended_action ?? "No action recommended.",
+    recommended_actions: (parsed as Partial<TriageResult>).recommended_actions ?? [],
+    estimated_area_ha: (parsed as Partial<TriageResult>).estimated_area_ha ?? 0,
     terrain: parsed.terrain ?? "Unknown",
     vegetation: parsed.vegetation ?? "Unknown",
     structures_nearby: parsed.structures_nearby ?? false,

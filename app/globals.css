@@ -18,3 +18,37 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Sidebar scrollbar — thin, dark, matches tile palette */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* Hide Next.js dev overlay — target element and any shadow host wrappers */
+nextjs-portal,
+nextjs-toast,
+[data-nextjs-dialog],
+[data-nextjs-dialog-overlay],
+[data-nextjs-toast],
+#nextjs__container_errors_label,
+#nextjs__container_build_error_label {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Match Leaflet container background to CARTO dark tile ocean colour */
+.leaflet-container {
+  background: #1a1a2e;
+}
