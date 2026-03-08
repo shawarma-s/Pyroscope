@@ -8,6 +8,7 @@
  */
 import { writeFile } from "fs/promises";
 import { existsSync } from "fs";
+import { tmpdir } from "os";
 
 const ZOOM = 12;
 const WIDTH = 600;
@@ -39,7 +40,7 @@ export async function downloadSatelliteImage(
     return null;
   }
 
-  const localPath = `/tmp/hotspot-${hotspotId.replace(/[^a-zA-Z0-9-]/g, "_")}.jpg`;
+  const localPath = `${tmpdir()}/hotspot-${hotspotId.replace(/[^a-zA-Z0-9-]/g, "_")}.jpg`;
   const publicUrl = buildMapboxUrl(lat, lon);
 
   // Use cached file if it already exists in this process run

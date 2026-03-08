@@ -47,33 +47,36 @@ function riskColor(level: RiskLevel): RiskColor {
 }
 
 function buildPrompt(hotspot: Hotspot, weather: WeatherData): string {
-  return `You are an expert wildfire analyst working in a wildfire triage system for Canada.
+  return `You are an expert wildfire analyst working in a global wildfire triage system.
 
-Analyze the provided satellite image of a thermal anomaly (possible wildfire ignition) at coordinates:
-- Latitude: ${hotspot.lat.toFixed(4)}, Longitude: ${hotspot.lon.toFixed(4)}
-- Fire Radiative Power: ${hotspot.frp} MW (higher = more energetic)
-- Satellite confidence: ${hotspot.confidence}
+You are assessing a VIIRS satellite thermal anomaly. Your job is to produce an accurate, calibrated risk assessment — not to assume the worst. Many hotspots are agricultural burns, small brush fires, or industrial heat sources with no meaningful threat. Only assign HIGH risk when the evidence genuinely supports it.
+
+Hotspot data:
+- Location: ${hotspot.lat.toFixed(4)}°, ${hotspot.lon.toFixed(4)}°
+- Fire Radiative Power (FRP): ${hotspot.frp} MW
+  FRP context: FRP measures radiant heat output. Values under ~10 MW are typically small or smoldering fires (agricultural burns, campfires, industrial). Values of 50–200 MW suggest active moderate fires. Values above 200 MW indicate large, energetic wildfires. Use this to calibrate your assessment — do not treat a low-FRP anomaly as an imminent catastrophe.
+- Detection confidence: ${hotspot.confidence} (low confidence = higher false-positive rate)
 - Detected: ${hotspot.acq_date} at ${hotspot.acq_time} UTC
 
-Current weather conditions:
-- Wind: ${weather.wind_speed_kmh} km/h from the ${weather.wind_direction_cardinal} (${weather.wind_direction_deg}°)
+Current weather at location:
+- Wind: ${weather.wind_speed_kmh} km/h from ${weather.wind_direction_cardinal} (${weather.wind_direction_deg}°)
 - Relative humidity: ${weather.humidity}%
 - Temperature: ${weather.temperature_c}°C
 
-Analyze the satellite image and provide a comprehensive wildfire triage assessment:
-1. Terrain type (e.g. steep slope, flat, rolling hills, valley, ridgeline)
-2. Vegetation density, type, and estimated dryness
+Using the satellite image and all data above, provide a triage assessment covering:
+1. Terrain type visible in the image
+2. Vegetation density, type, and apparent dryness
 3. Visible structures, roads, communities, or populated areas nearby
-4. Given wind direction, primary and secondary spread directions
-5. Estimate the approximate area affected in hectares based on visible burn scar or thermal signature
-6. Describe likely fire behavior (e.g. crown fire potential, spotting risk, rate of spread)
-7. A one-sentence threat summary for emergency dispatch
-8. Risk level — HIGH, MEDIUM, or LOW
-9. 3–5 prioritized recommended actions. For each action specify:
-   - priority: IMMEDIATE (life/safety, next 1h), URGENT (next 6h), or ADVISORY (monitoring/planning)
-   - category: one of evacuation | suppression | monitoring | notification | resource
-   - action: concise imperative sentence describing the specific action
-   - agency: the responsible agency or team (e.g. "BC Wildfire Service", "Local Fire Department", "RCMP", "Emergency Management BC", "Air Tanker Base")
+4. Given wind, likely spread direction if fire were to grow
+5. Estimated area affected in hectares based on the thermal signature or burn scar visible
+6. Likely fire behavior given the FRP, terrain, and weather — be honest if this appears minor
+7. A one-sentence threat summary calibrated to the actual signal strength
+8. Risk level — HIGH, MEDIUM, or LOW — justified by the totality of evidence, not just worst-case assumptions
+9. 2–4 recommended actions proportional to the assessed risk. A low-FRP anomaly with low confidence warrants monitoring actions, not mass evacuations. Each action must include:
+   - priority: IMMEDIATE (life/safety threat now), URGENT (action needed within 6h), or ADVISORY (monitoring/planning)
+   - category: evacuation | suppression | monitoring | notification | resource
+   - action: concise imperative sentence
+   - agency: responsible agency appropriate to the country/region of the coordinates
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
@@ -89,8 +92,7 @@ Respond ONLY with valid JSON (no markdown, no code fences):
   "conclusion": "1-2 sentence overall risk conclusion",
   "recommended_action": "single top-priority action sentence",
   "recommended_actions": [
-    {"priority": "IMMEDIATE", "category": "evacuation", "action": "...", "agency": "..."},
-    {"priority": "URGENT", "category": "suppression", "action": "...", "agency": "..."}
+    {"priority": "ADVISORY", "category": "monitoring", "action": "...", "agency": "..."}
   ]
 }`;
 }
@@ -126,8 +128,10 @@ export async function analyzeHotspot(
   const messageOptions: {
     content: string;
     stream: false;
+    llm_provider: string;
+    model_name: string;
     files?: string[];
-  } = { content: prompt, stream: false };
+  } = { content: prompt, stream: false, llm_provider: "openai", model_name: "gpt-4o" };
 
   if (imagePath) {
     messageOptions.files = [imagePath];

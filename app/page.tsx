@@ -118,12 +118,12 @@ export default function TriageDashboard() {
   const anyAnalyzing = analyzingIds.size > 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="h-screen overflow-hidden flex flex-col bg-slate-950 text-slate-100">
       {/* Header */}
       <header className="border-b border-slate-800 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <h1 className="font-semibold text-base text-slate-100">
-            Wildfire Triage
+            Pyroscope
           </h1>
           {hotspots.length > 0 && (
             <span className="font-mono text-xs bg-slate-800 border border-slate-700 rounded-full px-2 py-0.5 text-slate-300">
@@ -166,7 +166,7 @@ export default function TriageDashboard() {
       {/* Body: sidebar + map */}
       <div className="flex-1 flex min-h-0 overflow-hidden" style={{ height: "calc(100vh - 57px)" }}>
         {/* Left sidebar: hotspot cards */}
-        <aside className="w-80 flex-none border-r border-slate-800 overflow-y-auto bg-slate-950">
+        <aside className="w-80 flex-none border-r border-slate-800 overflow-y-auto bg-slate-950 pr-3">
           {error && (
             <div className="m-3 rounded-lg bg-red-900/30 border border-red-700/50 px-3 py-2 text-xs text-red-400">
               {error}
@@ -187,7 +187,7 @@ export default function TriageDashboard() {
               <p className="text-xs text-slate-500 px-1 pb-1">
                 {analyzedCount > 0
                   ? `${analyzedCount}/${sorted.length} analyzed — sorted by risk`
-                  : `${sorted.length} hotspots — click "Analyze All" to triage`}
+                  : `${sorted.length} hotspots sorted by FRP — click a card to analyze`}
               </p>
               {sorted.map((h) => (
                 <HotspotCard
@@ -198,6 +198,7 @@ export default function TriageDashboard() {
                   isSelected={selectedId === h.id}
                   isHovered={hoveredId === h.id}
                   onClick={() => setSelectedId(h.id === selectedId ? null : h.id)}
+                  onAnalyze={() => analyzeOne(h)}
                   onHover={() => setHoveredId(h.id)}
                   onHoverEnd={() => setHoveredId(null)}
                 />
@@ -207,7 +208,7 @@ export default function TriageDashboard() {
         </aside>
 
         {/* Right: map */}
-        <main className="flex-1 relative">
+        <main className="flex-1 relative h-full overflow-hidden">
           <MapView
             hotspots={enriched}
             selectedId={selectedId}
@@ -215,31 +216,31 @@ export default function TriageDashboard() {
             onSelect={(h) => setSelectedId(h.id === selectedId ? null : h.id)}
             onHover={(h) => setHoveredId(h.id)}
             onHoverEnd={() => setHoveredId(null)}
-            zoom={4}
+            zoom={3}
           />
 
-          {/* Map legend */}
-          <div className="absolute bottom-4 right-4 bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3 text-xs space-y-1.5 pointer-events-none">
-            <p className="text-slate-400 font-medium mb-2">Risk Level</p>
-            {(["HIGH", "MEDIUM", "LOW", "Pending"] as const).map((label) => {
-              const color =
-                label === "HIGH"
-                  ? "bg-red-500"
-                  : label === "MEDIUM"
-                    ? "bg-amber-500"
-                    : label === "LOW"
-                      ? "bg-emerald-500"
-                      : "bg-slate-400";
-              return (
-                <div key={label} className="flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full ${color}`} />
-                  <span className="text-slate-300">{label}</span>
-                </div>
-              );
-            })}
-          </div>
         </main>
       </div>
+
+      {/* Map legend — fixed to viewport, outside all nested contexts */}
+      <div className="fixed bottom-4 right-4 z-[9999] bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3 text-xs space-y-1.5 pointer-events-none">
+        <p className="text-slate-400 font-medium mb-2">Risk Level</p>
+        {(["HIGH", "MEDIUM", "LOW", "Pending"] as const).map((label) => {
+          const color =
+            label === "HIGH"
+              ? "bg-red-500"
+              : label === "MEDIUM"
+                ? "bg-amber-500"
+                : label === "LOW"
+                  ? "bg-emerald-500"
+                  : "bg-slate-400";
+          return (
+            <div key={label} className="flex items-center gap-2">
+              <span className={`w-3 h-3 rounded-full ${color}`} />
+              <span className="text-slate-300">{label}</span>
+            </div>
+          );
+        })}</div>
 
       {/* Detail modal */}
       {selected && (

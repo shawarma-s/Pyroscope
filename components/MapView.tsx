@@ -40,6 +40,7 @@ export function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markersRef = useRef<Map<string, import("leaflet").CircleMarker>>(new Map());
+  const roRef = useRef<ResizeObserver | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -49,16 +50,36 @@ export function MapView({
     import("leaflet").then((L) => {
       if (unmounted || !containerRef.current || mapRef.current) return;
 
-      // Default center: Canada
+      // Default center: Africa
       const defaultCenter: [number, number] = center
         ? [center[1], center[0]]
-        : [56.0, -96.0];
+        : [5.0, 20.0];
+
+      const worldBounds = L.default.latLngBounds(
+        L.default.latLng(-90, -180),
+        L.default.latLng(90, 180)
+      );
+
+      const calcMinZoom = () =>
+        Math.ceil(Math.log2((containerRef.current?.offsetWidth ?? 256) / 256));
 
       const map = L.default.map(containerRef.current, {
         center: defaultCenter,
         zoom,
         zoomControl: true,
+        maxBounds: worldBounds,
+        maxBoundsViscosity: 1.0,
+        minZoom: calcMinZoom(),
+        attributionControl: false,
       });
+
+      // Recalculate minZoom when the container resizes (e.g. browser zoom change)
+      roRef.current = new ResizeObserver(() => {
+        const mz = calcMinZoom();
+        map.setMinZoom(mz);
+        if (map.getZoom() < mz) map.setZoom(mz);
+      });
+      if (containerRef.current) roRef.current.observe(containerRef.current);
 
       L.default
         .tileLayer(
@@ -67,6 +88,7 @@ export function MapView({
             attribution:
               '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
             subdomains: "abcd",
+            noWrap: true,
           }
         )
         .addTo(map);
@@ -80,6 +102,7 @@ export function MapView({
 
     return () => {
       unmounted = true;
+      roRef.current?.disconnect();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -147,10 +170,8 @@ export function MapView({
   }, [hotspots, selectedId, onSelect]);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full bg-slate-800"
-      style={{ minHeight: 300 }}
-    />
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="w-full h-full bg-slate-800" />
+    </div>
   );
 }

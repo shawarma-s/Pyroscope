@@ -9,6 +9,7 @@ interface HotspotCardProps {
   isSelected: boolean;
   isHovered: boolean;
   onClick: () => void;
+  onAnalyze: () => void;
   onHover: () => void;
   onHoverEnd: () => void;
 }
@@ -20,6 +21,7 @@ export function HotspotCard({
   isSelected,
   isHovered,
   onClick,
+  onAnalyze,
   onHover,
   onHoverEnd,
 }: HotspotCardProps) {
@@ -52,7 +54,7 @@ export function HotspotCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-mono text-xs text-slate-400 truncate">
-            {hotspot.lat.toFixed(3)}°N, {Math.abs(hotspot.lon).toFixed(3)}°W
+            {Math.abs(hotspot.lat).toFixed(3)}{hotspot.lat >= 0 ? "°N" : "°S"}, {Math.abs(hotspot.lon).toFixed(3)}{hotspot.lon >= 0 ? "°E" : "°W"}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
             {hotspot.acq_date} {hotspot.acq_time} UTC &middot; {hotspot.satellite}
@@ -63,7 +65,13 @@ export function HotspotCard({
         ) : isAnalyzing ? (
           <span className="text-xs text-amber-400 animate-pulse font-mono">Analyzing...</span>
         ) : (
-          <span className="text-xs text-slate-600 font-mono">Pending</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAnalyze(); }}
+            className="text-[10px] font-medium rounded px-2 py-0.5 bg-amber-600/20 border border-amber-600/40 text-amber-400 hover:bg-amber-600/30 shrink-0"
+          >
+            Analyze
+          </button>
         )}
       </div>
 
